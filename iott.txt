@@ -1,0 +1,220 @@
+----------------------
+1
+----------------------
+
+STATUS = 0
+SENSOR_PIN = 4
+
+function vibrationDetector()
+    local counter = 0
+
+    gpio.mode(SENSOR_PIN, gpio.INT)
+
+    function incCounter()
+        counter = counter + 1
+        print(counter)
+    end
+
+    function updateStatus()
+        if(counter > 3) then
+            STATUS = 1
+        else
+            STATUS = 0
+        end
+        counter = 0
+    end
+
+    gpio.trig(SENSOR_PIN, "up", incCounter)
+    tmr.alarm(0, 45000, 1, updateStatus)
+end
+
+vibrationDetector()
+
+
+
+----------------------
+2
+----------------------
+
+STATUS = 0
+SENSOR_PIN = 4
+
+function vibrationDetector()
+    local counter = 0
+
+    gpio.mode(SENSOR_PIN, gpio.INT)
+
+    function debounce(fn)
+        local last = 0
+        local delay = 1000000
+
+        return function()
+            local now = tmr.now()
+            if now - last < delay then return end
+
+            last = now
+            return fn()
+        end
+    end
+
+
+    function incCounter()
+        counter = counter + 1
+        print(counter)
+    end
+
+    function updateStatus()
+        if(counter > 3) then
+            STATUS = 1
+        else
+            STATUS = 0
+        end
+        counter = 0
+    end
+
+    gpio.trig(SENSOR_PIN, "up", debounce(incCounter))
+    tmr.alarm(0, 45000, 1, updateStatus)
+end
+
+vibrationDetector()
+
+
+----------------------
+3
+----------------------
+
+wifi.setmode(wifi.STATION)
+wifi.sta.config("TWEVENT","Yercaud@7324")
+wifi.sta.connect()
+ip = wifi.sta.getip()
+print('Present IP = ', ip)
+
+
+srv=net.createServer(net.TCP)
+srv:listen(80,function(conn)
+  conn:on("receive",function(conn,payload)
+conn:send((STATUS == 1) and "SOMEONE IS PLAYING" or "NO ONE IS PLAYING")
+  end)
+  conn:on("sent",function(conn) conn:close() end)
+end)
+
+
+
+
+----------------------
+4
+----------------------
+
+m = mqtt.Client("ESP8266", 120, "", "")
+
+m:connect("test.mosquitto.org", 1883, 0, function(conn)
+    print("Connected")
+    m:subscribe("/gn",0, function(conn) 
+        print("subscribe success") 
+    end)
+
+    m:on("message", function(conn, topic, data) 
+  		print(topic .. ":" ) 
+  		if data ~= nil then
+    		print(data)
+  		end
+	end)
+end)
+
+
+----------------------
+5
+----------------------
+
+m = mqtt.Client("ESP8266", 120, "", "")
+
+m:connect("test.mosquitto.org", 1883, 0, function(conn)
+    print("Connected")
+end)
+
+m:publish("/gnn", "hi from esp", 1, 0)
+
+
+
+--------------------
+BUZZER - SUB
+--------------------
+
+BUZZER_PIN = 4
+
+wifi.setmode(wifi.STATION)
+wifi.sta.config("TWEVENT","Yercaud@7324")
+wifi.sta.connect()
+tmr.delay(1000000)
+
+print(wifi.sta.getip())
+
+gpio.mode(BUZZER_PIN, gpio.INPUT)
+
+m = mqtt.Client("ESP - 01", 120, "", "")
+
+m:connect("85.119.83.194", 1883, 0, function(conn)
+    print("Connected")
+    m:subscribe("/gn/tt",0, function(conn) 
+        print("subscribe success") 
+    end)
+
+    m:on("message", function(conn, topic, data) 
+          print(topic .. ":" ) 
+        if data ~= nil then
+            print(data)
+            gpio.write(BUZZER_PIN, gpio.HIGH)
+            tmr.delay(100000)
+            gpio.write(BUZZER_PIN, gpio.LOW)
+        end
+    end)
+end)
+
+--------------------
+BUZZER - PUB
+--------------------
+
+SENSOR_PIN = 4
+
+ip = wifi.sta.getip()
+print('Present IP = ', ip)
+
+wifi.setmode(wifi.STATION)
+wifi.sta.config("TWEVENT","Yercaud@7324")
+wifi.sta.connect()
+ip = wifi.sta.getip()
+tmr.delay(1000000)
+
+m = mqtt.Client("ESP - 02", 120, "", "")
+
+m:connect("test.mosquitto.org", 1883, 0, function(conn)
+    print("Connected")
+end)
+
+function vibrationDetector()
+
+    gpio.mode(SENSOR_PIN, gpio.INT)
+
+    function debounce(fn)
+        local last = 0
+        local delay = 1000000
+
+        return function()
+            local now = tmr.now()
+            if now - last < delay then return end
+
+            last = now
+            return fn()
+        end
+    end
+
+
+    function notify()
+        print("publishing")
+        m:publish("/gn/tt", "1", 1, 0)
+    end
+
+    gpio.trig(SENSOR_PIN, "up", debounce(notify))
+end
+
+vibrationDetector()
